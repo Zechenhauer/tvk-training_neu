@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Kapellen 1919 - Trainingsplaner</title>
+    <!-- Tailwind CSS & FontAwesome Icons -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #121214; color: #e2e8f0; }
+        .card { background-color: #1a1a1e; border: 1px solid #2d2d34; }
+        .btn-ja { background-color: #16a34a; }
+        .btn-ja:hover { background-color: #15803d; }
+        .btn-nein { background-color: #dc2626; }
+        .btn-nein:hover { background-color: #b91c1c; }
+        .active-ja { background-color: #16a34a !important; box-shadow: 0 0 12px #16a34a; }
+        .active-nein { background-color: #dc2626 !important; box-shadow: 0 0 12px #dc2626; }
+    </style>
+</head>
+<body class="p-4 max-w-md mx-auto font-sans">
+
+    <!-- HEADER -->
+    <div class="text-center my-6">
+        <div class="inline-block bg-yellow-500 text-black font-bold text-xs px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+            TV Kapellen 1919
+        </div>
+        <h1 class="text-2xl font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
+            <i class="fa-solid text-yellow-500 fa-bullseye"></i> Trainings-Planer
+        </h1>
+        <p class="text-sm text-gray-400 mt-1">Trag dich ein für die aktuelle Woche</p>
+    </div>
+
+    <!-- PROFILE / LOGIN SECTION -->
+    <div id="profile-section" class="card rounded-2xl p-5 mb-6 shadow-xl">
+        <div id="login-view" class="hidden">
+            <label class="block text-sm font-semibold text-gray-300 mb-2">Dein Name für das Training:</label>
+            <div class="relative flex flex-col gap-2">
+                <div class="flex gap-2">
+                    <input type="text" id="username-input" placeholder="Z.B. Max Mustermann" autocomplete="off"
+                           class="bg-[#24242b] border border-[#3f3f46] text-white px-4 py-3 rounded-xl flex-1 focus:outline-none focus:border-yellow-500 text-base">
+                    <button onclick="saveProfile()" class="bg-yellow-500 hover:bg-yellow-600 text-black font-bold px-5 rounded-xl transition-all">
+                        OK
+                    </button>
+                </div>
+                <!-- Vorschlagsliste für bekannte Namen -->
+                <div id="name-suggestions" class="hidden absolute left-0 right-14 top-14 bg-[#1a1a1e] border border-[#3f3f46] rounded-xl max-h-40 overflow-y-auto z-10 shadow-2xl"></div>
+            </div>
+        </div>
+        <div id="user-view" class="hidden flex items-center justify-between">
+            <div>
+                <span class="text-xs text-gray-400 block">Eingeloggt als</span>
+                <span id="current-user" class="text-lg font-bold text-white"></span>
+            </div>
+            <button onclick="logout()" class="text-xs text-gray-400 hover:text-red-400 border border-[#3f3f46] px-3 py-1.5 rounded-lg bg-[#24242b] transition-all">
+                <i class="fa-solid fa-right-from-bracket mr-1"></i> Ändern
+            </button>
+        </div>
+    </div>
+
+    <!-- TRAINING DAYS (MON - FRI) -->
+    <div id="main-content" class="hidden space-y-3 mb-8">
+        <h2 class="text-base font-bold text-gray-300 uppercase tracking-wide px-1">Deine Zusagen</h2>
+        <div id="days-container" class="space-y-3">
+            <!-- Wochentage werden hier dynamisch eingefügt -->
+        </div>
+    </div>
+
+    <!-- DASHBOARD SECTION -->
+    <div class="card rounded-2xl p-5 shadow-xl mb-12">
+        <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-chart-simple text-yellow-500"></i> Wer trainiert wann?
+        </h2>
+        <div id="dashboard-container" class="space-y-4">
+            <!-- Dashboard Bars werden hier eingefügt -->
+        </div>
+    </div>
+
+    <!-- LADE-ANIMATION -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black/80 flex flex-col items-center justify-center z-50 transition-all duration-300">
+        <div class="animate-spin rounded-full h-12 w-12 border-4 border-yellow-500 border-t-transparent mb-4"></div>
+        <p class="text-yellow-500 font-medium">Lade Trainingsdaten...</p>
+    </div>
+
+    <script>
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzTlZAlmexyAtbr-nnD7sXhxm9Xjy55caJuivRvk7twKjuwys_1c5_CGVZu8vWbteuWag/exec";
+
+        let currentUser = localStorage.getItem("darts_username") || "";
+        let globalData = { anzahlSpieler: [], stati: {} };
+        let weekDates = [];
+
+        // HIER IST DIE COOLE NEUE BERECHNUNG FÜR DEN START AM 08.06.2026
+        function initWeekDates() {
+            let current = new Date();
+            let day = current.getDay(); // 0 = Sonntag, 1 = Montag, ..., 6 = Samstag
+            
+            let monday = new Date();
+            
+            if (day === 0) { 
+                // Heute ist Sonntag -> Geh +1 Tag nach vorne zu morgen (Montag)
+                monday.setDate(current.getDate() + 1);
+            } else if (day === 6) { 
+                // Heute ist Samstag -> Geh +2 Tage nach vorne zu Montag
+                monday.setDate(current.getDate() + 2);
+            } else { 
+                // Unter der Woche -> Geh zurück zum Montag dieser Woche
+                monday.setDate(current.getDate() - (day - 1));
+            }
+
+            weekDates = [];
+            for (let i = 0; i < 5; i++) {
+                let d = new Date(monday);
+                d.setDate(monday.getDate() + i);
+                let yyyy = d.getFullYear();
+                let mm = String(d.getMonth() + 1).padStart(2, '0');
+                let dd = String(d.getDate()).padStart(2, '0');
+                weekDates.push(`${yyyy}-${mm}-${dd}`);
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById("loading-overlay").style.display = show ? "flex" : "none";
+        }
+
+        async function loadData() {
+            showLoading(true);
+            try {
+                let response = await fetch(WEB_APP_URL);
+                let data = await response.json();
+                
+                globalData.anzahlSpieler = data.anzahlSpieler || [];
+                globalData.stati = data.stati || {};
+                
+                renderApp();
+            } catch (err) {
+                alert("Fehler beim Laden der Daten! Bitte Seite neu laden.");
+                console.error(err);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function renderApp() {
+            if (!currentUser) {
+                document.getElementById("login-view").classList.remove("hidden");
+                document.getElementById("user-view").classList.add("hidden");
+                document.getElementById("main-content").classList.add("hidden");
+                initAutoComplete();
+            } else {
+                document.getElementById("login-view").classList.add("hidden");
+                document.getElementById("user-view").classList.remove("hidden");
+                document.getElementById("current-user").innerText = currentUser;
+                document.getElementById("main-content").classList.remove("hidden");
+                renderDays();
+            }
+            renderDashboard();
+        }
+
+        function initAutoComplete() {
+            const input = document.getElementById("username-input");
+            const sugBox = document.getElementById("name-suggestions");
+
+            input.addEventListener("input", () => {
+                let val = input.value.trim().toLowerCase();
+                sugBox.innerHTML = "";
+                if (!val || !globalData.anzahlSpieler.length) {
+                    sugBox.classList.add("hidden");
+                    return;
+                }
+
+                let matches = globalData.anzahlSpieler.filter(n => n.toLowerCase().includes(val));
+                if (!matches.length) {
+                    sugBox.classList.add("hidden");
+                    return;
+                }
+
+                sugBox.classList.remove("hidden");
+                matches.forEach(name => {
+                    let btn = document.createElement("button");
+                    btn.className = "w-full text-left px-4 py-2.5 hover:bg-[#24242b] text-sm text-gray-200 border-b border-[#2d2d34] last:border-0";
+                    btn.innerText = name;
+                    btn.type = "button";
+                    btn.onclick = () => {
+                        input.value = name;
+                        sugBox.classList.add("hidden");
+                    };
+                    sugBox.appendChild(btn);
+                });
+            });
+
+            document.addEventListener("click", (e) => {
+                if (e.target !== input) sugBox.classList.add("hidden");
+            });
+        }
+
+        function renderDays() {
+            const container = document.getElementById("days-container");
+            container.innerHTML = "";
+            const tagenamen = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
+
+            weekDates.forEach((dateStr, idx) => {
+                let userStatus = (globalData.stati[dateStr] && globalData.stati[dateStr][currentUser]) || "";
+                let displayDate = dateStr.split("-").reverse().slice(0, 2).join(".");
+
+                let div = document.createElement("div");
+                div.className = "flex items-center justify-between p-3 rounded-xl bg-[#24242b] border border-[#2d2d34]";
+                div.innerHTML = `
+                    <div>
+                        <span class="font-bold text-white block">${tagenamen[idx]}</span>
+                        <span class="text-xs text-gray-500">${displayDate}.</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="submitStatus('${dateStr}', 'ja')" class="btn-ja text-white font-bold px-4 py-2 rounded-xl text-sm transition-all ${userStatus === 'ja' ? 'active-ja' : 'opacity-40'}">
+                            <i class="fa-solid fa-check"></i> Dabei
+                        </button>
+                        <button onclick="submitStatus('${dateStr}', 'nein')" class="btn-nein text-white font-bold px-4 py-2 rounded-xl text-sm transition-all ${userStatus === 'nein' ? 'active-nein' : 'opacity-40'}">
+                            <i class="fa-solid fa-xmark"></i> Weg
+                        </button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderDashboard() {
+            const container = document.getElementById("dashboard-container");
+            container.innerHTML = "";
+            const tagenamen = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
+
+            weekDates.forEach((dateStr, idx) => {
+                let tagesStati = globalData.stati[dateStr] || {};
+                let jaSpieler = Object.keys(tagesStati).filter(name => tagesStati[name] === 'ja');
+                let count = jaSpieler.length;
+
+                let percent = Math.min((count / 20) * 100, 100);
+
+                let dayBox = document.createElement("div");
+                dayBox.className = "border-b border-[#2d2d34] pb-3 last:border-0";
+                
+                let listHtml = jaSpieler.map(p => `<span class="inline-block bg-[#24242b] border border-[#3f3f46] text-xs px-2.5 py-1 rounded-md text-gray-300 font-medium">${p}</span>`).join(" ");
+                if(count === 0) listHtml = `<span class="text-xs text-gray-500 italic">Noch keine Zusagen</span>`;
+
+                dayBox.innerHTML = `
+                    <div class="flex justify-between items-center text-sm font-bold text-gray-300 mb-1">
+                        <span>${tagenamen[idx]}</span>
+                        <span class="text-yellow-500">${count} Spieler</span>
+                    </div>
+                    <div class="w-full bg-[#24242b] h-2.5 rounded-full overflow-hidden mb-2 cursor-pointer" onclick="toggleDetails('${dateStr}')">
+                        <div class="bg-yellow-500 h-2.5 rounded-full transition-all duration-500" style="width: ${percent}%"></div>
+                    </div>
+                    <div id="details-${dateStr}" class="hidden mt-2 bg-[#131316] p-3 rounded-xl border border-[#2d2d34]">
+                        <div class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">Zusagen:</div>
+                        <div class="flex flex-wrap gap-1.5">${listHtml}</div>
+                    </div>
+                `;
+                container.appendChild(dayBox);
+            });
+        }
+
+        function toggleDetails(dateStr) {
+            let el = document.getElementById(`details-${dateStr}`);
+            el.classList.toggle("hidden");
+        }
+
+        async function submitStatus(datum, status) {
+            if (!currentUser) return;
+            showLoading(true);
+
+            if (!globalData.stati[datum]) globalData.stati[datum] = {};
+            globalData.stati[datum][currentUser] = status;
+            renderApp();
+
+            try {
+                let response = await fetch(WEB_APP_URL, {
+                    method: "POST",
+                    body: JSON.stringify({ datum: datum, spieler: currentUser, status: status })
+                });
+                let res = await response.json();
+                if (res.result !== "success") throw new Error();
+            } catch (err) {
+                alert("Speichern fehlgeschlagen! Bitte noch mal versuchen.");
+                loadData();
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function saveProfile() {
+            let input = document.getElementById("username-input").value.trim();
+            if (input.length < 2) {
+                alert("Bitte gib einen gültigen Namen ein (mind. 2 Zeichen).");
+                return;
+            }
+            currentUser = input;
+            localStorage.setItem("darts_username", currentUser);
+            renderApp();
+        }
+
+        function logout() {
+            if(confirm("Möchtest du dich wirklich abmelden / den Namen ändern?")) {
+                currentUser = "";
+                localStorage.removeItem("darts_username");
+                renderApp();
+            }
+        }
+
+        initWeekDates();
+        loadData();
+    </script>
+</body>
+</html>
