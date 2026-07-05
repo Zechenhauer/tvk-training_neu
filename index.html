@@ -22,51 +22,30 @@
         <h1 class="text-2xl font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
             <i class="fa-solid text-yellow-500 fa-bullseye"></i> Trainings-Planer
         </h1>
-        <p class="text-sm text-gray-400 mt-1">Trag dich ein für die aktuelle Woche</p>
     </div>
 
-    <div id="profile-section" class="card rounded-2xl p-5 mb-6 shadow-xl">
+    <div id="profile-section" class="card rounded-2xl p-5 mb-6">
         <div id="login-view">
-            <label class="block text-sm font-semibold text-gray-300 mb-2">Dein Name für das Training:</label>
-            <div class="flex gap-2">
-                <input type="text" id="username-input" placeholder="Z.B. Jürgen Schützendorf" autocomplete="off" class="bg-[#24242b] border border-[#3f3f46] text-white px-4 py-3 rounded-xl flex-1 focus:outline-none focus:border-yellow-500 text-base">
-                <button onclick="saveProfile()" class="bg-yellow-500 hover:bg-yellow-600 text-black font-bold px-5 rounded-xl transition-all">OK</button>
-            </div>
+            <input type="text" id="username-input" placeholder="Name eingeben..." class="w-full bg-[#24242b] border border-[#3f3f46] p-3 rounded-xl text-white mb-2">
+            <button onclick="saveProfile()" class="w-full bg-yellow-500 text-black font-bold py-3 rounded-xl">Anmelden</button>
         </div>
-        <div id="user-view" class="hidden flex items-center justify-between">
-            <div>
-                <span class="text-xs text-gray-400 block">Eingeloggt als</span>
-                <span id="current-user" class="text-lg font-bold text-white"></span>
-            </div>
-            <button onclick="logout()" class="text-xs text-gray-400 hover:text-red-400 border border-[#3f3f46] px-3 py-1.5 rounded-lg bg-[#24242b] transition-all">
-                <i class="fa-solid fa-right-from-bracket mr-1"></i> Ändern
-            </button>
+        <div id="user-view" class="hidden flex justify-between items-center">
+            <span id="current-user" class="font-bold"></span>
+            <button onclick="logout()" class="text-xs text-gray-400">Abmelden</button>
         </div>
     </div>
 
     <div id="main-content" class="hidden space-y-3 mb-8">
-        <h2 class="text-base font-bold text-gray-300 uppercase tracking-wide px-1">Deine Zusagen</h2>
         <div id="days-container" class="space-y-3"></div>
     </div>
 
-    <div class="card rounded-2xl p-5 shadow-xl mb-12">
-        <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <i class="fa-solid fa-chart-simple text-yellow-500"></i> Wer trainiert wann?
-        </h2>
-        <div id="dashboard-container" class="space-y-4"></div>
-    </div>
-
-    <div id="loading-overlay" class="fixed inset-0 bg-black/80 flex flex-col items-center justify-center z-50">
-        <div class="animate-spin rounded-full h-12 w-12 border-4 border-yellow-500 border-t-transparent mb-4"></div>
-        <p class="text-yellow-500 font-medium">Lade Trainingsdaten...</p>
+    <div id="loading-overlay" class="fixed inset-0 bg-black/80 hidden flex-col items-center justify-center z-50">
+        <div class="animate-spin rounded-full h-12 w-12 border-4 border-yellow-500 border-t-transparent"></div>
     </div>
 
     <script>
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzTlZAlmexyAtbr-nnD7sXhxm9Xjy55caJuivRvk7twKjuwys_1c5_CGVZu8vWbteuWag/exec";
-        const ERLAUBTE_SPIELER = ["Jürgen Schützendorf", "Max Mustermann"]; // Hier deine Spieler eintragen
-        
         let currentUser = localStorage.getItem("darts_username") || "";
-        let globalData = { stati: {} };
         let weekDates = [];
 
         function initWeekDates() {
@@ -80,42 +59,28 @@
             }
         }
 
-        function showLoading(show) { document.getElementById("loading-overlay").style.display = show ? "flex" : "none"; }
-
-        async function loadData() {
-            showLoading(true);
-            try {
-                let res = await fetch(WEB_APP_URL);
-                let data = await res.json();
-                globalData.stati = data.stati || {};
-                renderApp();
-            } catch(e) { console.error(e); } finally { showLoading(false); }
+        async function submit(datum, status) {
+            let uhrzeit = document.getElementById('time-' + datum).value;
+            document.getElementById("loading-overlay").style.display = "flex";
+            
+            await fetch(WEB_APP_URL, {
+                method: "POST",
+                body: JSON.stringify({ datum, spieler: currentUser, status, uhrzeit })
+            });
+            window.location.reload();
         }
 
         function saveProfile() {
-            let input = document.getElementById("username-input").value.trim();
-            if (!ERLAUBTE_SPIELER.includes(input)) {
-                alert("Fehler: Name nicht in der Spielerliste!");
-                return;
-            }
-            currentUser = input;
+            currentUser = document.getElementById("username-input").value;
             localStorage.setItem("darts_username", currentUser);
             renderApp();
         }
 
-        function logout() {
-            if(confirm("Möchtest du dich abmelden?")) {
-                currentUser = "";
-                localStorage.removeItem("darts_username");
-                renderApp();
-            }
-        }
+        function logout() { localStorage.removeItem("darts_username"); location.reload(); }
 
         function renderApp() {
             if (!currentUser) {
                 document.getElementById("login-view").classList.remove("hidden");
-                document.getElementById("user-view").classList.add("hidden");
-                document.getElementById("main-content").classList.add("hidden");
             } else {
                 document.getElementById("login-view").classList.add("hidden");
                 document.getElementById("user-view").classList.remove("hidden");
@@ -123,58 +88,22 @@
                 document.getElementById("current-user").innerText = currentUser;
                 renderDays();
             }
-            renderDashboard();
         }
 
         function renderDays() {
             const container = document.getElementById("days-container");
-            container.innerHTML = "";
-            const tagenamen = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
-            weekDates.forEach((dateStr, idx) => {
-                let userEntry = (globalData.stati[dateStr] && globalData.stati[dateStr][currentUser]) || {status: "", uhrzeit: ""};
+            weekDates.forEach(date => {
                 let div = document.createElement("div");
-                div.className = "flex items-center justify-between p-3 rounded-xl bg-[#24242b] border border-[#2d2d34]";
-                div.innerHTML = `
-                    <div><span class="font-bold text-white block">${tagenamen[idx]}</span><span class="text-xs text-gray-500">${dateStr}</span></div>
-                    <div class="flex flex-col gap-1 items-end">
-                        <input type="time" id="time-${dateStr}" value="${userEntry.uhrzeit}" class="bg-[#1a1a1e] text-white text-xs p-1 rounded border border-[#3f3f46]">
-                        <div class="flex gap-2">
-                            <button onclick="submit('${dateStr}', 'ja')" class="btn-ja text-white font-bold px-3 py-1 rounded text-xs ${userEntry.status === 'ja' ? 'active-ja' : 'opacity-40'}">Ja</button>
-                            <button onclick="submit('${dateStr}', 'nein')" class="btn-nein text-white font-bold px-3 py-1 rounded text-xs ${userEntry.status === 'nein' ? 'active-nein' : 'opacity-40'}">Weg</button>
-                        </div>
-                    </div>
-                `;
+                div.className = "flex justify-between p-3 rounded-xl bg-[#24242b]";
+                div.innerHTML = `<div>${date}</div>
+                    <input type="time" id="time-${date}" class="bg-black p-1 text-white">
+                    <button onclick="submit('${date}', 'ja')" class="bg-green-700 px-2 py-1 rounded">Ja</button>`;
                 container.appendChild(div);
             });
         }
 
-        function renderDashboard() {
-            const container = document.getElementById("dashboard-container");
-            container.innerHTML = "";
-            const tagenamen = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
-            weekDates.forEach((dateStr, idx) => {
-                let jaSpieler = Object.keys(globalData.stati[dateStr] || {}).filter(n => globalData.stati[dateStr][n].status === 'ja');
-                container.innerHTML += `
-                    <div class="border-b border-[#2d2d34] pb-2">
-                        <div class="flex justify-between text-sm font-bold text-gray-300"><span>${tagenamen[idx]}</span><span>${jaSpieler.length} Spieler</span></div>
-                        <div class="text-xs text-gray-500 mt-1">${jaSpieler.join(", ") || "Keine Zusagen"}</div>
-                    </div>
-                `;
-            });
-        }
-
-        async function submit(datum, status) {
-            let uhrzeit = document.getElementById(`time-${datum}`).value;
-            showLoading(true);
-            await fetch(WEB_APP_URL, {
-                method: "POST",
-                body: JSON.stringify({ datum, spieler: currentUser, status, uhrzeit })
-            });
-            await loadData();
-        }
-
         initWeekDates();
-        loadData();
+        renderApp();
     </script>
 </body>
 </html>
