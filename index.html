@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Kapellen 1919 - Trainingsplaner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #121214; color: #e2e8f0; }
+        .card { background-color: #1a1a1e; border: 1px solid #2d2d34; }
+        .active-ja { background-color: #16a34a !important; box-shadow: 0 0 12px #16a34a; }
+        .active-nein { background-color: #dc2626 !important; box-shadow: 0 0 12px #dc2626; }
+    </style>
+</head>
+<body class="p-4 max-w-md mx-auto font-sans">
+
+    <div class="text-center my-6">
+        <h1 class="text-2xl font-extrabold text-white">TV Kapellen 1919</h1>
+        <p class="text-sm text-gray-400">Trainings-Planer</p>
+    </div>
+
+    <div id="login-view" class="card rounded-2xl p-5 mb-6">
+        <label class="text-sm font-semibold text-gray-300">Dein Name:</label>
+        <input type="text" id="username-input" placeholder="Z.B. Jürgen Schützendorf" class="w-full bg-[#24242b] border border-[#3f3f46] p-3 rounded-xl mt-2 mb-4">
+        <button onclick="saveProfile()" class="w-full bg-yellow-500 text-black font-bold py-3 rounded-xl">Anmelden</button>
+    </div>
+
+    <div id="main-content" class="hidden space-y-6">
+        <div id="days-container" class="space-y-3"></div>
+        <button onclick="logout()" class="text-gray-500 text-xs w-full text-center underline">Abmelden</button>
+    </div>
+
+    <script>
+        const WEB_APP_URL = "DEINE_URL_HIER";
+        const ERLAUBTE_SPIELER = ["Jürgen Schützendorf", "Max Mustermann"]; // Hier alle Namen ergänzen
+        
+        let currentUser = localStorage.getItem("darts_username") || "";
+        let weekDates = [];
+
+        function initWeekDates() {
+            let monday = new Date();
+            let day = monday.getDay();
+            monday.setDate(monday.getDate() - (day === 0 ? 6 : day - 1));
+            for (let i = 0; i < 5; i++) {
+                let d = new Date(monday);
+                d.setDate(monday.getDate() + i);
+                weekDates.push(d.toISOString().split('T')[0]);
+            }
+        }
+
+        function saveProfile() {
+            let input = document.getElementById("username-input").value.trim();
+            if (!ERLAUBTE_SPIELER.includes(input)) {
+                alert("Fehler: Name nicht in der Spielerliste!");
+                return;
+            }
+            currentUser = input;
+            localStorage.setItem("darts_username", currentUser);
+            renderApp();
+        }
+
+        function logout() {
+            localStorage.removeItem("darts_username");
+            location.reload();
+        }
+
+        async function renderApp() {
+            if (!currentUser) {
+                document.getElementById("login-view").classList.remove("hidden");
+                document.getElementById("main-content").classList.add("hidden");
+            } else {
+                document.getElementById("login-view").classList.add("hidden");
+                document.getElementById("main-content").classList.remove("hidden");
+                await loadDays();
+            }
+        }
+
+        async function loadDays() {
+            let res = await fetch(WEB_APP_URL);
+            let data = await res.json();
+            const container = document.getElementById("days-container");
+            container.innerHTML = "";
+            const tage = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
+
+            weekDates.forEach((date, i) => {
+                let statusObj = (data.stati[date] && data.stati[date][currentUser]) || {status: "", uhrzeit: ""};
+                let div = document.createElement("div");
+                div.className = "card p-4 rounded-xl flex justify-between items-center";
+                div.innerHTML = `
+                    <div><div class="font-bold">${tage[i]}</div><div class="text-xs text-gray-500">${date}</div></div>
+                    <div class="flex flex-col gap-2 items-end">
+                        <input type="time" id="time-${date}" value="${statusObj.uhrzeit}" class="bg-[#24242b] p-1 rounded text-xs">
+                        <div class="flex gap-2">
+                            <button onclick="submit('${date}', 'ja')" class="px-3 py-1 rounded bg-green-700 text-xs ${statusObj.status === 'ja' ? 'active-ja' : ''}">Ja</button>
+                            <button onclick="submit('${date}', 'nein')" class="px-3 py-1 rounded bg-red-700 text-xs ${statusObj.status === 'nein' ? 'active-nein' : ''}">Weg</button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function submit(datum, status) {
+            let uhrzeit = document.getElementById(`time-${datum}`).value;
+            await fetch(WEB_APP_URL, {
+                method: "POST",
+                body: JSON.stringify({ datum, spieler: currentUser, status, uhrzeit })
+            });
+            loadDays();
+        }
+
+        initWeekDates();
+        renderApp();
+    </script>
+</body>
+</html>
